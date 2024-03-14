@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-with open("movies.csv", "w", newline="", encoding="utf-8") as file:
+with open("movies.csv", "a", newline="", encoding="utf-8") as file:
     headers = [
         "page_url",
         "img_url",
@@ -21,8 +21,8 @@ with open("movies.csv", "w", newline="", encoding="utf-8") as file:
         "kinopoisk",
     ]
     writer = csv.DictWriter(file, fieldnames=headers)
-    writer.writeheader()
-    for i in tqdm(range(1, 1041), desc="Processing"):
+    # writer.writeheader()
+    for i in tqdm(range(974, 1041), desc="Processing"):
         page = requests.get(f"https://kinogo.uk/page/{i}/").text
         soup = BeautifulSoup(page, "html.parser")
         links = soup.find_all("h2", class_="card__title")
@@ -31,26 +31,33 @@ with open("movies.csv", "w", newline="", encoding="utf-8") as file:
             sleep(0.5)
             film = requests.get(link.find("a")["href"]).text
             movie_soup = BeautifulSoup(film, "html.parser")
-            title = movie_soup.find("h1").text
-            title = re.sub(r"\((\d+)\)", "", title).strip()
+            try:
+                title = movie_soup.find("h1").text
+                title = re.sub(r"\((\d+)\)", "", title).strip()
+            except AttributeError:
+                pass
             try:
                 description = movie_soup.find(
                     class_="page__text full-text clearfix"
                 ).get_text()
             except AttributeError:
                 pass
-            img_source = f"kinogo.uk/{movie_soup.find(class_='page ignore-select pmovie').find('img')['src']}"
-            genres = movie_soup.find(class_="pmovie__header-list flex-grow-1").find_all(
-                "span", itemprop="genre"
-            )
-
+            try:
+                img_source = f"kinogo.uk/{movie_soup.find(class_='page ignore-select pmovie').find('img')['src']}"
+            except AttributeError:
+                img_source = ""
+            try:
+                genres = movie_soup.find(
+                    class_="pmovie__header-list flex-grow-1"
+                ).find_all("span", itemprop="genre")
+            except AttributeError:
+                pass
             genres = [genre.text for genre in genres][0].split(",")
             if len(genres) > 1:
                 movie_type = genres[0]
                 genres = " ,".join(genres[1:])
             else:
-                movie_type = genres[0]
-                genres = None
+                movie_type = genres[0].strip()
             try:
                 actors = (
                     movie_soup.find(class_="pmovie__header-list flex-grow-1")
@@ -78,7 +85,7 @@ with open("movies.csv", "w", newline="", encoding="utf-8") as file:
             try:
                 imdb = float(
                     re.sub(
-                        r"\((\s*\d+\s*)+\)",
+                        r"\(\s*\d+(\s+\d+)*\s*(?:K)?\s*\)",
                         "",
                         movie_soup.find(class_="card__rating-ext imdb").text,
                     )
@@ -88,7 +95,7 @@ with open("movies.csv", "w", newline="", encoding="utf-8") as file:
             try:
                 kinopoisk = float(
                     re.sub(
-                        r"\((\s*\d+\s*)+\)",
+                        r"\(\s*\d+(\s+\d+)*\s*(?:K)?\s*\)",
                         "",
                         movie_soup.find(class_="card__rating-ext kp").text,
                     )
